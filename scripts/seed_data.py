@@ -73,7 +73,7 @@ def seed_hospitals():
             "address": "Bannerghatta Road, Bangalore",
             "lat": 12.8917,
             "lng": 77.5963,
-            "phone": "+917439580798",  # Demo: verified Twilio number
+            "phone": "+917439580798",  # Sidhartha
             "specializations": ["cardiology", "neurology", "trauma"],
             "icu_beds": 0,
             "general_beds": 5,
@@ -86,7 +86,7 @@ def seed_hospitals():
             "address": "HAL Airport Road, Bangalore",
             "lat": 12.9592,
             "lng": 77.6482,
-            "phone": "+917439580798",  # Demo: verified Twilio number
+            "phone": "+917257959463",  # Friend A
             "specializations": ["cardiology", "orthopedics"],
             "icu_beds": 1,
             "general_beds": 3,
@@ -99,7 +99,7 @@ def seed_hospitals():
             "address": "Cunningham Road, Bangalore",
             "lat": 12.9862,
             "lng": 77.5907,
-            "phone": "+917439580798",  # Demo: verified Twilio number
+            "phone": "+917970866804",  # Friend B
             "specializations": ["trauma", "general surgery"],
             "icu_beds": 1,
             "general_beds": 4,
