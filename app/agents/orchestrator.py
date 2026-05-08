@@ -222,7 +222,7 @@ RULES:
 """
 
 orchestrator_agent = LlmAgent(
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     name="orchestrator_agent",
     description="Routes emergency patients to the best available hospital by checking bed availability and drive times.",
     instruction=ORCHESTRATOR_INSTRUCTION,

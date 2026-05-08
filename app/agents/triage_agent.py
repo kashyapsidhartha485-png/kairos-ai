@@ -120,7 +120,7 @@ ALWAYS cross-reference with patient history. A "simple" chest pain becomes CRITI
 """
 
 triage_agent = LlmAgent(
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     name="triage_agent",
     description="Analyzes patient symptoms and medical history to determine emergency type, bed type, specialist, and urgency.",
     instruction=TRIAGE_INSTRUCTION,

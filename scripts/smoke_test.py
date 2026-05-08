@@ -67,7 +67,7 @@ def check_gemini():
         from app.services.gemini_client import get_client
         client = get_client()
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents="Say hello in one word."
         )
         print(f"  OK Gemini response: {response.text.strip()}")

@@ -1,7 +1,7 @@
 """
 Kairos AI — Gemini Client
 Wrapper for Google Generative AI using the new google.genai SDK.
-Uses gemini-2.0-flash model.
+Uses gemini-2.5-flash model.
 """
 import os
 import json
@@ -36,7 +36,7 @@ async def gemini_json_call(system_prompt: str, user_prompt: str) -> dict:
     client = get_client()
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=f"System: {system_prompt}\n\nUser: {user_prompt}",
         config=types.GenerateContentConfig(
             temperature=0.3,
@@ -63,7 +63,7 @@ async def gemini_text_call(system_prompt: str, user_prompt: str) -> str:
     client = get_client()
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=f"System: {system_prompt}\n\nUser: {user_prompt}",
         config=types.GenerateContentConfig(temperature=0.3)
     )
