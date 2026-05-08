@@ -92,7 +92,17 @@ async def match(img_path: str) -> dict:
 
         for doc in users_docs:
             user_data = doc.to_dict()
-            user_embeddings = user_data.get("embedding", [])
+
+            # Load embeddings: try JSON string first, then legacy array field
+            import json as _json
+            user_embeddings = []
+            if user_data.get("embedding_json"):
+                try:
+                    user_embeddings = _json.loads(user_data["embedding_json"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            elif user_data.get("embedding"):
+                user_embeddings = user_data["embedding"]
 
             if not user_embeddings:
                 continue

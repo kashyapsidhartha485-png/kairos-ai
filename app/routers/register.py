@@ -87,6 +87,8 @@ async def register_user(
     # Generate user ID
     user_id = str(uuid.uuid4())
 
+    import json as _json
+
     # Store user in Firestore
     user_data = {
         "name": name,
@@ -97,7 +99,9 @@ async def register_user(
         "medications": medications,
         "emergency_contact_name": emergency_contact_name,
         "emergency_contact_phone": emergency_contact_phone,
-        "embedding": embeddings,  # Array of arrays
+        # Firestore doesn't allow nested arrays, so serialize embeddings as JSON string
+        "embedding_json": _json.dumps(embeddings),
+        "embedding_count": len(embeddings),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
 

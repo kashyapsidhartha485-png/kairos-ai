@@ -132,6 +132,37 @@ async def identify_patient(
         patient_data = match_result["patient_data"]
         patient_id = match_result["patient_id"]
 
+        # ── Check if this patient already has a recent active emergency ──
+        existing_emergencies = emergencies_ref().where("patient_id", "==", patient_id).where("status", "==", "active").stream()
+        for existing_doc in existing_emergencies:
+            existing = existing_doc.to_dict()
+            e_created = existing.get("created_at", "")
+            try:
+                if isinstance(e_created, str):
+                    created_dt = datetime.fromisoformat(e_created.replace("Z", "+00:00"))
+                else:
+                    created_dt = e_created
+                if datetime.now(timezone.utc) - created_dt < timedelta(minutes=10):
+                    # Same person already has an active emergency — delete the new one
+                    emergencies_ref().document(emergency_id).delete()
+                    return IdentifyResponse(
+                        emergency_id=existing_doc.id,
+                        identification_status="already_reported",
+                        warning=f"This patient ({patient_data.get('name', 'Unknown')}) already has an active emergency.",
+                        patient_card=PatientCard(
+                            name=patient_data.get("name", ""),
+                            age=patient_data.get("age", 0),
+                            blood_group=patient_data.get("blood_group", ""),
+                            conditions=patient_data.get("conditions"),
+                            allergies=patient_data.get("allergies"),
+                            medications=patient_data.get("medications"),
+                            emergency_contact_name=patient_data.get("emergency_contact_name", ""),
+                            emergency_contact_phone=patient_data.get("emergency_contact_phone", "")
+                        )
+                    )
+            except (ValueError, TypeError):
+                pass
+
         # Update emergency with patient
         emergencies_ref().document(emergency_id).update({
             "patient_id": patient_id,
