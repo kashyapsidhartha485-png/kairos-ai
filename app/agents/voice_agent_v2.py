@@ -220,96 +220,86 @@ async def parse_response(transcript: str) -> dict:
 
 
 # ──────────────────────────────────────────────
-# Voice Call Scripts (Multi-lingual)
+# Voice Call Script Generation (from real triage data)
 # ──────────────────────────────────────────────
 
-def generate_call_script(hospital_name: str, emergency_type: str, bed_type: str, language: str = "en") -> str:
-    """Generate the voice prompt script in the appropriate language."""
-    
-    scripts = {
-        "en": (
-            f"Hello, this is an automated call from Kairos Emergency AI. "
-            f"We have a {emergency_type} patient who needs an {bed_type} bed urgently. "
-            f"Is an {bed_type} bed available at {hospital_name}? "
-            f"Please say Yes or No."
-        ),
-        "hi": (
-            f"Namaste, yeh Kairos Emergency AI ka automated call hai. "
-            f"Humare paas ek {emergency_type} patient hai jisko {bed_type} bed chahiye urgently. "
-            f"Kya {hospital_name} mein {bed_type} bed available hai? "
-            f"Kripya Haan ya Na kahein."
-        ),
-        "kn": (
-            f"Namaskara, idu Kairos Emergency AI yinda automated call. "
-            f"Namage {emergency_type} patient iddare, {bed_type} bed urgently beku. "
-            f"{hospital_name} alli {bed_type} bed available ide? "
-            f"Dayavittu Houdu athava Illa heli."
+async def generate_call_script(hospital_name: str, triage_result: dict, patient_data: dict = None) -> str:
+    """
+    Generate a professional medical dispatch call script using Gemini.
+    Uses actual triage data from the emergency incident.
+    """
+    from app.services.gemini_client import gemini_text_call
+
+    emergency_type = triage_result.get("emergency_type", "emergency")
+    bed_type = triage_result.get("bed_type_needed", "ICU")
+    urgency = triage_result.get("urgency", "high")
+    specialist = triage_result.get("specialist_needed", "emergency physician")
+    symptoms = triage_result.get("symptoms", [])
+    vitals = triage_result.get("vitals", {})
+
+    # Patient info if available
+    age = ""
+    gender = ""
+    conditions = ""
+    if patient_data:
+        age = f"{patient_data.get('age', 'unknown')} year old"
+        gender = patient_data.get('gender', '')
+        conditions = patient_data.get('conditions', 'none known')
+
+    prompt = f"""Generate a 3-4 sentence hospital dispatch call script. Be professional and use proper medical terminology.
+
+INCIDENT DATA:
+- Emergency Type: {emergency_type}
+- Patient: {age} {gender}
+- Known Conditions: {conditions}
+- Symptoms: {', '.join(symptoms) if isinstance(symptoms, list) else symptoms}
+- Vitals: {json.dumps(vitals) if vitals else 'not available'}
+- Bed Type Required: {bed_type}
+- Specialist Needed: {specialist}
+- Urgency: {urgency}
+- Hospital: {hospital_name}
+
+FORMAT:
+"This is Kairos Emergency AI dispatch. [Patient description with medical details]. [What is needed]. Does your facility have [bed type] availability? Please say Yes or No."
+
+Keep it under 30 seconds when spoken. Use proper medical terms (e.g., "acute myocardial infarction" not "heart attack", "open fracture of tibia" not "broken leg")."""
+
+    try:
+        script = await gemini_text_call(
+            system_prompt="You are a professional emergency medical dispatch AI. Generate concise, clinical call scripts.",
+            user_prompt=prompt
         )
-    }
-    
-    return scripts.get(language, scripts["en"])
+        return script.strip().strip('"')
+    except Exception as e:
+        print(f"[Voice Agent] Script generation error: {e}")
+        # Fallback to basic script
+        return (
+            f"This is Kairos Emergency AI dispatch. "
+            f"We have a {urgency} priority {emergency_type} patient requiring {bed_type} admission "
+            f"with {specialist} consultation. "
+            f"Does {hospital_name} have {bed_type} availability? Please say Yes or No."
+        )
 
 
 # ──────────────────────────────────────────────
-# Telephony Bridge (Pluggable)
-# ──────────────────────────────────────────────
-
-class TelephonyBridge:
-    """
-    Abstract telephony bridge. Currently supports Twilio.
-    Can be swapped for Exotel, Plivo, or any SIP provider.
-    """
-    
-    @staticmethod
-    async def place_call(phone_number: str, audio_bytes: bytes, callback_url: str) -> dict:
-        """
-        Place a phone call and play audio. Returns call metadata.
-        """
-        # Try Twilio first
-        try:
-            from app.services.twilio_client import make_voice_call
-            call_sid = make_voice_call(to=phone_number, twiml_url=callback_url)
-            return {"provider": "twilio", "call_sid": call_sid, "status": "initiated"}
-        except Exception as twilio_err:
-            print(f"[Telephony] Twilio unavailable: {twilio_err}")
-        
-        # Fallback: No telephony provider available
-        print(f"[Telephony] No provider available. Call to {phone_number} simulated.")
-        return {
-            "provider": "simulated",
-            "status": "simulated",
-            "note": "No telephony provider configured. Configure Twilio/Exotel in .env"
-        }
-    
-    @staticmethod
-    async def send_notification(phone_number: str, message: str) -> dict:
-        """Send SMS/notification as fallback."""
-        try:
-            from app.services.twilio_client import send_sms
-            send_sms(to=phone_number, body=message)
-            return {"method": "sms", "status": "sent"}
-        except Exception:
-            print(f"[Telephony] SMS unavailable, notification logged only")
-            return {"method": "log_only", "status": "logged", "message": message}
-
-
-# ──────────────────────────────────────────────
-# Main Voice Agent — The Complete Pipeline
+# Main Voice Agent — Real-time Call with Triage Data
 # ──────────────────────────────────────────────
 
 async def call(hospital: dict, triage_result: dict) -> dict:
     """
-    Complete voice verification pipeline:
-    1. Generate script → 2. TTS → 3. Place call → 4. Get response → 5. STT → 6. Gemini parse
-    
-    For demo mode (no telephony): simulates the call and returns a pending result.
+    Hospital verification call using real incident data:
+    1. Gemini generates a medical dispatch script from triage data
+    2. Twilio calls hospital with the script
+    3. Records hospital's response
+    4. Gemini analyzes the recording
+    5. Returns bed availability result
+
+    The script includes proper medical terminology based on actual patient condition.
     """
     hospital_name = hospital.get("name", "Hospital")
     hospital_phone = hospital.get("phone", "")
     hospital_id = hospital.get("id", "")
-    emergency_type = triage_result.get("emergency_type", "emergency")
     bed_type = triage_result.get("bed_type_needed", "ICU")
-    language = hospital.get("preferred_language", "en")
 
     start_time = time.time()
     print(f"[Voice Agent] === Starting verification call to {hospital_name} ===")
@@ -325,85 +315,144 @@ async def call(hospital: dict, triage_result: dict) -> dict:
             "time_taken_ms": 0
         }
 
-    # Step 1: Generate the call script
-    script = generate_call_script(hospital_name, emergency_type, bed_type, language)
-    print(f"[Voice Agent] Script ({language}): {script[:80]}...")
+    # Fetch patient data if emergency has a patient_id
+    patient_data = None
+    emergency_id = triage_result.get("emergency_id", "")
+    if emergency_id:
+        try:
+            from app.services.firebase_client import emergencies_ref, users_ref
+            emerg_doc = emergencies_ref().document(emergency_id).get()
+            if emerg_doc.exists:
+                emerg = emerg_doc.to_dict()
+                patient_id = emerg.get("patient_id")
+                if patient_id:
+                    patient_doc = users_ref().document(patient_id).get()
+                    if patient_doc.exists:
+                        patient_data = patient_doc.to_dict()
+        except Exception as e:
+            print(f"[Voice Agent] Could not fetch patient data: {e}")
 
-    # Step 2: Convert to speech
-    audio_bytes = await generate_speech(script, f"{language}-IN")
+    # Step 1: Generate medical dispatch script from real triage data
+    print(f"[Voice Agent] Generating dispatch script from triage data...")
+    script = await generate_call_script(hospital_name, triage_result, patient_data)
+    print(f"[Voice Agent] Script: {script[:100]}...")
 
-    # Step 3: Place the call via telephony bridge
-    backend_url = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
-    callback_url = (
-        f"{backend_url}/api/twilio/hospital-verify"
-        f"?hospital_id={hospital_id}"
-        f"&emergency_type={emergency_type}"
-        f"&bed_type={bed_type}"
-    )
+    # Step 2: Place call with inline TwiML
+    try:
+        from twilio.rest import Client
+        import xml.sax.saxutils as saxutils
 
-    call_result = await TelephonyBridge.place_call(hospital_phone, audio_bytes, callback_url)
-    
-    # Also send SMS notification as backup
-    sms_body = (
-        f"KAIROS AI EMERGENCY\n\n"
-        f"{emergency_type.upper()} patient needs {bed_type} bed.\n"
-        f"Confirm at: {backend_url}/api/hospital/{hospital_id}/status\n\n"
-        f"Reply YES or NO"
-    )
-    await TelephonyBridge.send_notification(hospital_phone, sms_body)
+        twilio_client = Client(
+            os.getenv("TWILIO_ACCOUNT_SID"),
+            os.getenv("TWILIO_AUTH_TOKEN")
+        )
 
-    elapsed_ms = int((time.time() - start_time) * 1000)
+        # Escape script for XML
+        safe_script = saxutils.escape(script)
 
-    if call_result.get("provider") == "simulated":
-        # Demo mode: return result based on Firestore bed data
-        print(f"[Voice Agent] Demo mode — using digital fallback for {hospital_name}")
+        twiml = (
+            f'<Response>'
+            f'<Say voice="alice" language="en-IN">{safe_script}</Say>'
+            f'<Record maxLength="5" playBeep="true" trim="trim-silence"/>'
+            f'<Say voice="alice">Thank you. Our ambulance team has been updated. Goodbye.</Say>'
+            f'</Response>'
+        )
+
+        twilio_call = twilio_client.calls.create(
+            to=hospital_phone,
+            from_=os.getenv("TWILIO_PHONE_NUMBER"),
+            twiml=twiml,
+            timeout=30
+        )
+
+        print(f"[Voice Agent] Call placed! SID: {twilio_call.sid}")
+
+        # Poll for completion
+        for i in range(45):
+            twilio_call = twilio_client.calls(twilio_call.sid).fetch()
+            if twilio_call.status in ("completed", "failed", "busy", "no-answer", "canceled"):
+                break
+            await asyncio.sleep(2)
+
+        print(f"[Voice Agent] Call {twilio_call.status} ({twilio_call.duration}s)")
+
+        if twilio_call.status != "completed":
+            elapsed_ms = int((time.time() - start_time) * 1000)
+            return {
+                "bed_available": None,
+                "confidence": "low",
+                "method": "voice_call",
+                "raw_response": f"Call {twilio_call.status}",
+                "follow_up_needed": True,
+                "time_taken_ms": elapsed_ms
+            }
+
+        # Step 3: Fetch recording
+        await asyncio.sleep(3)
+        recordings = twilio_client.recordings.list(call_sid=twilio_call.sid)
+
+        if not recordings:
+            elapsed_ms = int((time.time() - start_time) * 1000)
+            return {
+                "bed_available": None,
+                "confidence": "low",
+                "method": "voice_call",
+                "raw_response": "No response recorded from hospital.",
+                "follow_up_needed": True,
+                "time_taken_ms": elapsed_ms
+            }
+
+        rec = recordings[0]
+        rec_url = f"https://api.twilio.com/2010-04-01/Accounts/{os.getenv('TWILIO_ACCOUNT_SID')}/Recordings/{rec.sid}.mp3"
+
+        import requests as http_requests
+        audio = http_requests.get(rec_url, auth=(
+            os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN")
+        )).content
+
+        # Step 4: Gemini analyzes the audio response
+        print(f"[Voice Agent] Analyzing {len(audio)} bytes with Gemini...")
+        from google import genai
+        from google.genai import types
+
+        gemini = genai.Client(api_key=os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"))
+        response = gemini.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[types.Content(parts=[
+                types.Part(text=(
+                    f'Analyze this hospital phone response. We asked about {bed_type} bed availability. '
+                    f'Return JSON: {{"transcript":"exact words","bed_available":true/false,'
+                    f'"confidence":"high/medium/low","language":"en/hi/kn"}}'
+                )),
+                types.Part(inline_data=types.Blob(mime_type="audio/mp3", data=audio))
+            ])],
+            config=types.GenerateContentConfig(temperature=0.1, response_mime_type="application/json")
+        )
+
+        result = json.loads(response.text)
+        elapsed_ms = int((time.time() - start_time) * 1000)
+
+        print(f"[Voice Agent] Result: bed={result.get('bed_available')}, "
+              f"said='{result.get('transcript')}', confidence={result.get('confidence')}")
+
+        return {
+            "bed_available": result.get("bed_available"),
+            "confidence": result.get("confidence", "medium"),
+            "method": "voice_call",
+            "raw_response": result.get("transcript", ""),
+            "follow_up_needed": False,
+            "time_taken_ms": elapsed_ms
+        }
+
+    except Exception as e:
+        print(f"[Voice Agent] Call failed: {e}")
+        elapsed_ms = int((time.time() - start_time) * 1000)
         bed_count = hospital.get("icu_beds", 0) if "icu" in bed_type.lower() else hospital.get("general_beds", 0)
         return {
             "bed_available": bed_count > 0,
             "confidence": "medium",
-            "method": "voice_simulated",
-            "raw_response": f"Call simulated (no telephony). Digital check: {bed_type} beds = {bed_count}",
+            "method": "digital_fallback",
+            "raw_response": f"Call failed ({e}). Digital check: {bed_type} beds = {bed_count}",
             "follow_up_needed": False,
-            "time_taken_ms": elapsed_ms,
-            "call_provider": "simulated"
+            "time_taken_ms": elapsed_ms
         }
-
-    # Call was placed — return pending (will be updated by webhook callback)
-    return {
-        "bed_available": None,
-        "confidence": "pending",
-        "method": "voice_call",
-        "raw_response": f"Call to {hospital_name} initiated via {call_result['provider']}",
-        "call_sid": call_result.get("call_sid"),
-        "follow_up_needed": False,
-        "time_taken_ms": elapsed_ms,
-        "call_provider": call_result["provider"]
-    }
-
-
-async def handle_recording_callback(audio_bytes: bytes, hospital_id: str) -> dict:
-    """
-    Called by the telephony webhook when the hospital's response recording is ready.
-    Runs the STT → Gemini parse pipeline.
-    """
-    print(f"[Voice Agent] Processing recording callback for hospital {hospital_id}")
-    
-    # Step 4: Transcribe the recording
-    transcript = await transcribe_audio(audio_bytes)
-    
-    if not transcript:
-        return {
-            "bed_available": None,
-            "confidence": "low",
-            "what_they_said": "(could not transcribe)",
-            "follow_up_needed": True
-        }
-    
-    # Step 5: Parse with Gemini
-    parsed = await parse_response(transcript)
-    
-    print(f"[Voice Agent] Result: bed_available={parsed.get('bed_available')}, "
-          f"confidence={parsed.get('confidence')}, "
-          f"language={parsed.get('language_detected')}")
-    
-    return parsed

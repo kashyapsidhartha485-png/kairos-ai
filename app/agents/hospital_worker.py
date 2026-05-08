@@ -1,15 +1,16 @@
 """
 Kairos AI — Hospital Worker
-Checks a single hospital's bed availability.
+Checks hospital bed availability — single or parallel.
 Fresh data → digital check. Stale data → voice call.
 PRD Section 7.4
 """
 import time
+import asyncio
 from datetime import datetime, timezone, timedelta
 from app.services.firebase_client import (
     hospital_verifications_ref, emergencies_ref
 )
-from app.agents import voice_agent
+from app.agents import voice_agent_v2 as voice_agent
 
 
 STALENESS_THRESHOLD_MINUTES = 30
@@ -135,3 +136,49 @@ async def check(hospital: dict, emergency: dict, emergency_id: str, triage_resul
         **hospital,
         "verification": verification_result
     }
+
+
+async def check_parallel(hospitals: list, emergency: dict, emergency_id: str, triage_result: dict) -> list:
+    """
+    Check MULTIPLE hospitals simultaneously using asyncio.gather.
+    Calls all hospitals at the same time — much faster than sequential.
+
+    Args:
+        hospitals: list of hospital dicts to check
+        emergency: dict with emergency data
+        emergency_id: Firestore document ID
+        triage_result: parsed triage data
+
+    Returns:
+        list of hospital dicts with verification results
+    """
+    print(f"[Hospital Worker] Checking {len(hospitals)} hospitals IN PARALLEL...")
+
+    tasks = [
+        check(hospital, emergency, emergency_id, triage_result)
+        for hospital in hospitals
+    ]
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Handle any exceptions
+    verified = []
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            print(f"[Hospital Worker] Error checking {hospitals[i].get('name')}: {result}")
+            verified.append({
+                **hospitals[i],
+                "verification": {
+                    "bed_available": None,
+                    "method": "error",
+                    "confidence": "low",
+                    "raw_response": str(result)
+                }
+            })
+        else:
+            verified.append(result)
+
+    available = [h for h in verified if h.get("verification", {}).get("bed_available")]
+    print(f"[Hospital Worker] Parallel check complete: {len(available)}/{len(hospitals)} have beds")
+
+    return verified

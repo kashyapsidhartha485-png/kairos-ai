@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.models.schemas import HealthResponse
 
 # Import routers
-from app.routers import register, emergency, driver, hospital, ambulance
+from app.routers import register, emergency, driver, hospital, ambulance, twilio_webhook
 
 app = FastAPI(
     title="Kairos AI",
@@ -32,6 +32,7 @@ app.include_router(emergency.router)
 app.include_router(driver.router)
 app.include_router(hospital.router)
 app.include_router(ambulance.router)
+app.include_router(twilio_webhook.router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["Health"])

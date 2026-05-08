@@ -73,11 +73,12 @@ def seed_hospitals():
             "address": "Bannerghatta Road, Bangalore",
             "lat": 12.8917,
             "lng": 77.5963,
-            "phone": "+911234567890",  # Replace with real number for demo
+            "phone": "+917439580798",  # Demo: verified Twilio number
             "specializations": ["cardiology", "neurology", "trauma"],
             "icu_beds": 0,
             "general_beds": 5,
             "ventilator_beds": 2,
+            "preferred_language": "en",
             "last_updated": fresh  # Fresh — digital check
         },
         {
@@ -85,11 +86,12 @@ def seed_hospitals():
             "address": "HAL Airport Road, Bangalore",
             "lat": 12.9592,
             "lng": 77.6482,
-            "phone": "+911234567891",  # Replace with Friend A's number
+            "phone": "+917439580798",  # Demo: verified Twilio number
             "specializations": ["cardiology", "orthopedics"],
             "icu_beds": 1,
             "general_beds": 3,
             "ventilator_beds": 1,
+            "preferred_language": "en",
             "last_updated": stale  # Stale — will trigger voice call
         },
         {
@@ -97,11 +99,12 @@ def seed_hospitals():
             "address": "Cunningham Road, Bangalore",
             "lat": 12.9862,
             "lng": 77.5907,
-            "phone": "+911234567892",  # Replace with Friend B's number
+            "phone": "+917439580798",  # Demo: verified Twilio number
             "specializations": ["trauma", "general surgery"],
             "icu_beds": 1,
             "general_beds": 4,
             "ventilator_beds": 0,
+            "preferred_language": "en",
             "last_updated": stale  # Stale — will trigger voice call
         }
     ]
