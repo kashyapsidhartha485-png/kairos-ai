@@ -148,12 +148,11 @@ async def get_driver_dashboard(ambulance_id: str):
     )
 
     if status == "available":
-        # Count unread notifications
-        unread = driver_notifications_ref() \
+        # Count unread notifications (single-field query + Python filter to avoid composite index)
+        all_notifs = driver_notifications_ref() \
             .where("ambulance_id", "==", ambulance_id) \
-            .where("read", "==", False) \
             .stream()
-        response.unread_notifications = sum(1 for _ in unread)
+        response.unread_notifications = sum(1 for n in all_notifs if not n.to_dict().get("read", False))
         return response
 
     # Find the active emergency for this ambulance
@@ -243,12 +242,11 @@ async def get_driver_dashboard(ambulance_id: str):
                     )
             response.scoring_reason = emergency.get("scoring_reason")
 
-    # Unread notifications
-    unread = driver_notifications_ref() \
+    # Unread notifications (single-field query + Python filter to avoid composite index)
+    all_notifs = driver_notifications_ref() \
         .where("ambulance_id", "==", ambulance_id) \
-        .where("read", "==", False) \
         .stream()
-    response.unread_notifications = sum(1 for _ in unread)
+    response.unread_notifications = sum(1 for n in all_notifs if not n.to_dict().get("read", False))
 
     return response
 
@@ -268,7 +266,6 @@ async def get_driver_notifications(ambulance_id: str):
 
     docs = driver_notifications_ref() \
         .where("ambulance_id", "==", ambulance_id) \
-        .order_by("timestamp", direction="DESCENDING") \
         .limit(50) \
         .stream()
 
@@ -288,6 +285,9 @@ async def get_driver_notifications(ambulance_id: str):
             read=is_read,
             metadata=n.get("metadata")
         ))
+
+    # Sort by timestamp descending (avoids needing Firestore composite index)
+    notifications.sort(key=lambda n: n.timestamp, reverse=True)
 
     return DriverNotificationsResponse(
         notifications=notifications,

@@ -3,13 +3,27 @@ Kairos AI — Face Agent
 Uses DeepFace (ArcFace + RetinaFace) for face embedding 
 generation and matching against registered users.
 PRD Sections 6.1, 9.2, 9.3, 9.4, 9.5
+
+NOTE: DeepFace/TensorFlow are loaded lazily to avoid protobuf
+version conflicts at import time. The models are loaded on first use.
 """
 import numpy as np
 import os
 import time
 import traceback
-from deepface import DeepFace
 from app.services.firebase_client import users_ref
+
+
+def _get_deepface():
+    """Lazy-load DeepFace to avoid protobuf conflicts at import time."""
+    try:
+        from deepface import DeepFace
+        return DeepFace
+    except Exception as e:
+        raise ImportError(
+            f"DeepFace could not be loaded (likely protobuf version conflict): {e}. "
+            "Face recognition is unavailable. Install compatible protobuf version."
+        )
 
 
 def generate_embedding(img_path: str) -> list:
@@ -25,6 +39,7 @@ def generate_embedding(img_path: str) -> list:
     Raises:
         ValueError: If no face detected in the image
     """
+    DeepFace = _get_deepface()
     try:
         result = DeepFace.represent(
             img_path=img_path,
@@ -110,7 +125,7 @@ async def match(img_path: str) -> dict:
                 "patient_data": best_user_data,
                 "distance": best_distance,
                 "time_taken_ms": elapsed_ms,
-                "warning": "Medium confidence match — verify patient identity"
+                "warning": "Medium confidence match -- verify patient identity"
             }
         else:
             return {
