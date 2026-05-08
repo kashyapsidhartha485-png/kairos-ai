@@ -1,0 +1,461 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+/* ─── Base Styles ─────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: #F0FDF9;
+  color: #0F172A;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── Design Tokens ────────────────────────────────────────── */
+:root {
+  --teal: #2DD4BF;
+  --teal-dark: #0F9D8E;
+  --teal-light: #CCFBF1;
+  --sidebar: #0F172A;
+  --red: #FF0000;
+  --red-dark: #DC2626;
+  --red-light: #FEE2E2;
+  --green: #16A34A;
+  --green-light: #DCFCE7;
+  --amber: #D97706;
+  --bg: #F0FDF9;
+  --card: #FFFFFF;
+  --text: #0F172A;
+  --text-muted: #64748B;
+  --border: #E2E8F0;
+}
+
+/* ─── Minimum Tap Targets ──────────────────────────────────── */
+button,
+[role="button"],
+a,
+input[type="submit"],
+input[type="button"],
+label[for] {
+  min-height: 48px;
+  min-width: 48px;
+}
+
+/* ─── Kairos Component Classes ─────────────────────────────── */
+.kairos-sidebar {
+  background-color: var(--sidebar);
+  color: #FFFFFF;
+  min-height: 100vh;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.kairos-sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.kairos-sidebar-logo-icon {
+  background-color: var(--teal);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.kairos-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.65);
+  cursor: pointer;
+  border-radius: 8px;
+  margin: 2px 8px;
+  transition: all 0.2s ease;
+  min-height: 48px;
+  text-decoration: none;
+}
+
+.kairos-nav-item:hover {
+  background-color: rgba(255,255,255,0.08);
+  color: #FFFFFF;
+}
+
+.kairos-nav-item.active {
+  background-color: var(--teal);
+  color: #FFFFFF;
+  font-weight: 600;
+}
+
+.kairos-card {
+  background: var(--card);
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.kairos-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.kairos-badge-teal {
+  background-color: var(--teal-light);
+  color: #0F766E;
+}
+
+.kairos-badge-pink {
+  background-color: #FCE7F3;
+  color: #BE185D;
+}
+
+.kairos-badge-red {
+  background-color: var(--red-light);
+  color: var(--red-dark);
+}
+
+.kairos-badge-green {
+  background-color: var(--green-light);
+  color: var(--green);
+}
+
+.kairos-badge-amber {
+  background-color: #FEF3C7;
+  color: var(--amber);
+}
+
+.kairos-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: var(--teal);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 48px;
+  text-decoration: none;
+}
+
+.kairos-btn-primary:hover {
+  background-color: var(--teal-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(45,212,191,0.3);
+}
+
+.kairos-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: var(--red-dark);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 48px;
+}
+
+.kairos-btn-danger:hover {
+  background-color: #B91C1C;
+  transform: translateY(-1px);
+}
+
+.kairos-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: transparent;
+  color: var(--teal);
+  padding: 11px 24px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 2px solid var(--teal);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 48px;
+}
+
+.kairos-btn-secondary:hover {
+  background-color: var(--teal-light);
+}
+
+.kairos-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--text);
+  background: white;
+  transition: border-color 0.2s ease;
+  outline: none;
+  min-height: 48px;
+}
+
+.kairos-input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(45,212,191,0.1);
+}
+
+.kairos-input::placeholder {
+  color: var(--text-muted);
+}
+
+.kairos-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ─── Status Feed Animation ────────────────────────────────── */
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  animation: fadeInUp 0.4s ease-out;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot-active {
+  background-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(45,212,191,0.3);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.status-dot-done {
+  background-color: var(--green);
+}
+
+.status-dot-pending {
+  background-color: var(--border);
+}
+
+/* ─── Emergency Capture Button ─────────────────────────────── */
+.capture-btn {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: var(--red);
+  border: 4px solid white;
+  box-shadow: 0 0 0 4px rgba(255,0,0,0.3), 0 8px 24px rgba(0,0,0,0.4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.capture-btn:hover, .capture-btn:active {
+  transform: scale(0.95);
+  box-shadow: 0 0 0 6px rgba(255,0,0,0.4), 0 8px 24px rgba(0,0,0,0.5);
+}
+
+/* ─── Countdown Overlay ────────────────────────────────────── */
+.countdown-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 96px;
+  font-weight: 900;
+  color: white;
+  text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  animation: countdownPulse 1s ease-in-out;
+}
+
+@keyframes countdownPulse {
+  0% { transform: scale(1.5); opacity: 0; }
+  20% { transform: scale(1); opacity: 1; }
+  80% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.8); opacity: 0; }
+}
+
+@keyframes fadeInUp {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(45,212,191,0.3); }
+  50% { box-shadow: 0 0 0 6px rgba(45,212,191,0.15); }
+}
+
+/* ─── Flash Red Animation ──────────────────────────────────── */
+.flash-red {
+  animation: flashBackground 0.5s ease-in-out 3;
+}
+
+@keyframes flashBackground {
+  0%, 100% { background-color: var(--bg); }
+  50% { background-color: var(--red-light); }
+}
+
+/* ─── Hospital Alert Banner ────────────────────────────────── */
+.alert-banner {
+  background: linear-gradient(135deg, #FFF1F2, #FEE2E2);
+  border: 2px solid var(--red-dark);
+  border-radius: 12px;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* ─── Live Map Container ───────────────────────────────────── */
+.map-container {
+  width: 100%;
+  height: 300px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #E8F4F8;
+  border: 1px solid var(--border);
+}
+
+/* ─── Routing Status Panel ─────────────────────────────────── */
+.routing-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.routing-row:last-child {
+  border-bottom: none;
+}
+
+/* ─── Scrollbar Styling ────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ─── Responsive Utilities ─────────────────────────────────── */
+@media (max-width: 768px) {
+  .kairos-sidebar {
+    display: none;
+  }
+
+  .mobile-nav {
+    display: flex;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-nav {
+    display: none;
+  }
+}
+
+/* ─── Loading Spinner ──────────────────────────────────────── */
+.spinner {
+  border: 3px solid var(--border);
+  border-top-color: var(--teal);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Medical Card ─────────────────────────────────────────── */
+.medical-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.medical-info-row:last-child {
+  border-bottom: none;
+}
+
+.medical-info-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.medical-info-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  text-align: right;
+  max-width: 60%;
+}
