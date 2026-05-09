@@ -60,21 +60,10 @@ def compute_l2_distance(emb1: list, emb2: list) -> float:
     return float(np.linalg.norm(np.array(emb1) - np.array(emb2)))
 
 
-async def match(img_path: str) -> dict:
+def _match_sync(img_path: str) -> dict:
     """
+    Synchronous face matching — runs in a thread pool.
     Match a victim's face photo against all registered users.
-    
-    Args:
-        img_path: Path to the victim's photo
-        
-    Returns:
-        dict with keys:
-            - identification_status: "identified" | "not_identified"
-            - confidence: "high" | "medium" | None
-            - patient_id: str | None
-            - patient_data: dict | None
-            - distance: float | None
-            - time_taken_ms: int
     """
     start_time = time.time()
 
@@ -99,7 +88,7 @@ async def match(img_path: str) -> dict:
             if user_data.get("embedding_json"):
                 try:
                     user_embeddings = _json.loads(user_data["embedding_json"])
-                except (json.JSONDecodeError, TypeError):
+                except (_json.JSONDecodeError, TypeError):
                     pass
             elif user_data.get("embedding"):
                 user_embeddings = user_data["embedding"]
@@ -148,10 +137,17 @@ async def match(img_path: str) -> dict:
             }
 
     except ValueError as e:
-        elapsed_ms = int((time.time() - start_time) * 1000)
         raise
     except Exception as e:
-        elapsed_ms = int((time.time() - start_time) * 1000)
         print(f"[Face Agent] Error during matching: {e}")
         traceback.print_exc()
         raise
+
+
+async def match(img_path: str) -> dict:
+    """
+    Async wrapper — runs CPU-heavy DeepFace matching in a thread pool
+    so it doesn't block the FastAPI event loop.
+    """
+    import asyncio
+    return await asyncio.to_thread(_match_sync, img_path)

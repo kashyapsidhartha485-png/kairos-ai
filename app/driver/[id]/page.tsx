@@ -101,7 +101,7 @@ export default function DriverDashboard() {
         try {
           const s = await api.getSimulationStatus(dashboard.emergency_id!);
           setSimStatus(s);
-          if (s.phase === 'complete') {
+          if (s.phase === 'complete' || s.phase === 'arrived') {
             clearInterval(simRef.current!);
             setSimRunning(false);
           }

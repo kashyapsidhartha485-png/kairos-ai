@@ -71,6 +71,40 @@ def make_voice_call(to: str, twiml_url: str) -> str:
     return call.sid
 
 
+def make_verification_call(to: str, emergency_type: str, bed_type: str, hospital_name: str) -> str:
+    """
+    Place a verification call using inline TwiML (no callback URL needed).
+    The call speaks the question and records the hospital's response.
+    Uses the same proven pattern as test_call.py.
+    
+    Returns: Call SID
+    """
+    client = get_twilio_client()
+    from_number = os.getenv("TWILIO_PHONE_NUMBER")
+
+    twiml = (
+        '<Response>'
+        '<Say voice="alice" language="en-IN">'
+        f'This is Kairos Emergency AI dispatch. '
+        f'We have a {emergency_type} patient en route who urgently needs an {bed_type} bed. '
+        f'Does {hospital_name} have an {bed_type} bed available? '
+        f'Please say Yes or No after the beep.'
+        '</Say>'
+        '<Record maxLength="5" playBeep="true" trim="trim-silence"/>'
+        '<Say voice="alice">Thank you. Our ambulance team has been updated. Goodbye.</Say>'
+        '</Response>'
+    )
+
+    call = client.calls.create(
+        to=to,
+        from_=from_number,
+        twiml=twiml
+    )
+
+    print(f"[Twilio] Verification call placed to {hospital_name} ({to}), SID: {call.sid}")
+    return call.sid
+
+
 def generate_hospital_call_twiml(audio_url: str) -> str:
     """
     Generate TwiML XML for a hospital verification call.

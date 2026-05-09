@@ -99,8 +99,32 @@ async def identify_patient(
     tmp_file.close()
 
     try:
-        # ── Run face matching ──
-        match_result = await face_agent.match(tmp_file.name)
+        # ── Run face matching with a 15-second timeout ──
+        # First run may be slow (model download), subsequent runs are fast
+        match_result = await asyncio.wait_for(
+            face_agent.match(tmp_file.name),
+            timeout=15.0
+        )
+    except asyncio.TimeoutError:
+        # Face matching took too long — proceed as unidentified
+        print(f"[Emergency] Face matching timed out after 15s — proceeding as unidentified")
+        try:
+            os.unlink(tmp_file.name)
+        except OSError:
+            pass
+        emergencies_ref().document(emergency_id).update({
+            "identification_status": "not_identified"
+        })
+        return IdentifyResponse(
+            emergency_id=emergency_id,
+            identification_status="not_identified",
+            warning="Face matching timed out. You can still dispatch an ambulance immediately.",
+            first_aid_guidance=FirstAidGuidance(
+                dos=["Call emergency services", "Keep patient still", "Monitor breathing"],
+                donts=["Do not move the patient", "Do not give food or drink"],
+                cpr_needed=False
+            )
+        )
     except ValueError as e:
         # Face not detected
         os.unlink(tmp_file.name)
@@ -110,7 +134,12 @@ async def identify_patient(
         return IdentifyResponse(
             emergency_id=emergency_id,
             identification_status="not_identified",
-            warning="Face could not be detected in the uploaded photo."
+            warning="Face could not be detected in the uploaded photo.",
+            first_aid_guidance=FirstAidGuidance(
+                dos=["Call emergency services", "Keep patient still", "Monitor breathing"],
+                donts=["Do not move the patient", "Do not give food or drink"],
+                cpr_needed=False
+            )
         )
     finally:
         # Always clean up temp file
@@ -189,6 +218,19 @@ async def identify_patient(
         emergencies_ref().document(emergency_id).update({
             "identification_status": "not_identified"
         })
+
+        # Generate generic first-aid even for unidentified patients
+        try:
+            generic_patient = {"name": "Unidentified Patient", "conditions": "unknown"}
+            first_aid_result = await first_aid_agent.generate(generic_patient)
+            first_aid = FirstAidGuidance(**first_aid_result)
+        except Exception:
+            first_aid = FirstAidGuidance(
+                dos=["Call emergency services", "Keep patient still", "Monitor breathing"],
+                donts=["Do not move the patient", "Do not give food or drink"],
+                cpr_needed=False
+            )
+        warning = "Patient not found in database. You can still dispatch an ambulance immediately."
 
     # ── Log event ──
     emergency_events_ref().add({
@@ -294,6 +336,24 @@ async def dispatch_ambulance(emergency_id: str):
     if not emergency_doc.exists:
         raise HTTPException(status_code=404, detail="Emergency not found")
     emergency = emergency_doc.to_dict()
+
+    # Guard: prevent double-dispatch
+    if emergency.get("ambulance_id"):
+        existing_amb_id = emergency["ambulance_id"]
+        amb_doc = ambulances_ref().document(existing_amb_id).get()
+        if amb_doc.exists:
+            amb = amb_doc.to_dict()
+            eta = round(amb.get("drive_time_seconds", 600) / 60, 1)
+            return DispatchResponse(
+                assigned_ambulance=AmbulanceInfo(
+                    id=existing_amb_id,
+                    driver_name=amb.get("driver_name", "Driver"),
+                    current_lat=amb.get("current_lat", 0),
+                    current_lng=amb.get("current_lng", 0),
+                    eta_minutes=eta
+                ),
+                prep_instructions=emergency.get("prep_instructions", ["Prepare standard emergency kit"])
+            )
 
     bystander_lat = emergency.get("bystander_lat")
     bystander_lng = emergency.get("bystander_lng")
@@ -436,6 +496,73 @@ async def dispatch_ambulance(emergency_id: str):
         }
     })
 
+    # ── AUTO-TRIGGER: Triage → Orchestrator → Hospital calls ──
+    # Runs in background so dispatch returns instantly to the bystander
+    async def auto_route():
+        try:
+            # Build condition text from whatever we have
+            bystander_notes = emergency.get("bystander_notes") or ""
+            patient_conditions = ""
+            if patient_data:
+                patient_conditions = patient_data.get("conditions", "") or ""
+
+            condition_text = (
+                f"Patient: {patient_data.get('name', 'Unidentified') if patient_data else 'Unidentified'}. "
+                f"Bystander report: {bystander_notes or 'No details provided'}. "
+                f"Known conditions: {patient_conditions or 'None known'}."
+            )
+
+            # Create a condition record for triage
+            condition_id = str(uuid.uuid4())
+            patient_conditions_ref().document(condition_id).set({
+                "emergency_id": emergency_id,
+                "symptoms": bystander_notes or "Emergency reported via photo",
+                "vitals": None,
+                "consciousness_level": None,
+                "triage_result": None,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+
+            # Brief cooldown to avoid RPM burst
+            print(f"[Auto-Route] Starting triage in 3s...")
+            await asyncio.sleep(3)
+
+            print(f"[Auto-Route] Triage starting for {emergency_id}...")
+            for attempt in range(3):
+                try:
+                    await triage_agent.extract(condition_text, condition_id, emergency_id)
+                    break
+                except Exception as e:
+                    if "429" in str(e) and attempt < 2:
+                        wait = 5 * (attempt + 1)
+                        print(f"[Auto-Route] Triage hit rate limit, retrying in {wait}s (attempt {attempt+1}/3)")
+                        await asyncio.sleep(wait)
+                    else:
+                        raise
+
+            await asyncio.sleep(3)  # Brief cooldown before orchestrator
+
+            print(f"[Auto-Route] Orchestrator starting for {emergency_id}...")
+            for attempt in range(3):
+                try:
+                    await orchestrator_run(emergency_id)
+                    break
+                except Exception as e:
+                    if "429" in str(e) and attempt < 2:
+                        wait = 5 * (attempt + 1)
+                        print(f"[Auto-Route] Orchestrator hit rate limit, retrying in {wait}s (attempt {attempt+1}/3)")
+                        await asyncio.sleep(wait)
+                    else:
+                        raise
+
+            print(f"[Auto-Route] ✅ Hospital routing complete for {emergency_id}")
+        except Exception as e:
+            print(f"[Auto-Route] Pipeline error: {e}")
+            import traceback
+            traceback.print_exc()
+
+    asyncio.create_task(auto_route())
+
     return DispatchResponse(
         assigned_ambulance=AmbulanceInfo(
             id=winner["id"],
@@ -514,7 +641,7 @@ async def get_routing_status(emergency_id: str):
         raise HTTPException(status_code=404, detail="Emergency not found")
 
     emergency = emergency_doc.to_dict()
-    routing_status = emergency.get("routing_status", "pending")
+    routing_status = emergency.get("routing_status") or "pending"
 
     # Fetch hospital verifications for this emergency
     hospitals_checked = []

@@ -112,13 +112,14 @@ def check_hospital_beds(hospital_id: str, bed_type: str) -> dict:
     result = {
         "hospital_id": hospital_id,
         "hospital_name": h.get("name"),
+        "hospital_phone": h.get("phone", ""),
         "bed_type_checked": bed_type,
         "beds_available": bed_count,
         "bed_available": bed_count > 0,
         "method": method,
         "confidence": confidence,
         "specializations": h.get("specializations", []),
-        "note": "Data is stale (>30 min old)" if is_stale else "Data is fresh"
+        "note": "Data is stale (>30 min old) — consider calling to verify" if is_stale else "Data is fresh"
     }
 
     # Store verification record
@@ -133,6 +134,44 @@ def check_hospital_beds(hospital_id: str, bed_type: str) -> dict:
     })
 
     return result
+
+
+def call_hospital_for_verification(hospital_id: str, hospital_name: str, hospital_phone: str, emergency_type: str, bed_type: str) -> dict:
+    """Place a REAL phone call to a hospital to verify bed availability using Twilio AI voice.
+    Call this when check_hospital_beds returns stale data to get live verification.
+    The call will speak the question and record the hospital's response.
+    
+    Args:
+        hospital_id: The hospital document ID
+        hospital_name: Name of the hospital
+        hospital_phone: Phone number to call (with country code)
+        emergency_type: Type of emergency (cardiac, trauma, etc.)
+        bed_type: Type of bed needed (ICU, general, etc.)
+        
+    Returns:
+        dict with call status, SID, and message
+    """
+    if not hospital_phone:
+        return {"status": "no_phone", "message": f"No phone number for {hospital_name}"}
+
+    try:
+        from app.services.twilio_client import make_verification_call
+        call_sid = make_verification_call(
+            to=hospital_phone,
+            emergency_type=emergency_type,
+            bed_type=bed_type,
+            hospital_name=hospital_name
+        )
+        print(f"[Orchestrator] ☎️ Verification call placed to {hospital_name} ({hospital_phone})")
+        return {
+            "status": "call_placed",
+            "call_sid": call_sid,
+            "hospital_id": hospital_id,
+            "message": f"Live verification call placed to {hospital_name} at {hospital_phone}. Call is in progress."
+        }
+    except Exception as e:
+        print(f"[Orchestrator] Call to {hospital_name} failed: {e}")
+        return {"status": "call_failed", "error": str(e), "hospital_id": hospital_id}
 
 
 def get_drive_time(origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float) -> dict:
@@ -208,28 +247,31 @@ YOUR PROCESS:
 2. Call update_routing_status with status "checking_hospitals"
 3. Call get_nearby_hospitals to find hospitals near the emergency
 4. For EACH hospital (starting with closest), call check_hospital_beds to verify bed availability
-5. For hospitals WITH available beds, call get_drive_time from the ambulance to the hospital
-6. DECIDE: Pick the hospital that has the right bed type AND is fastest to reach
-7. If two hospitals are within 5 minutes drive time, prefer the one with a matching specialist
-8. Call select_hospital with your final choice and a clear reason
+5. **IMPORTANT**: If check_hospital_beds returns stale data (method is "digital_stale"), you MUST call call_hospital_for_verification to place a live phone call to that hospital. Use the hospital_phone from the check result along with the emergency_type and bed_type from the triage.
+6. For hospitals WITH available beds, call get_drive_time from the ambulance to the hospital
+7. DECIDE: Pick the hospital that has the right bed type AND is fastest to reach
+8. If two hospitals are within 5 minutes drive time, prefer the one with a matching specialist
+9. Call select_hospital with your final choice and a clear reason
 
 RULES:
 - NEVER select a hospital without checking beds first
 - Always check at least 3 hospitals before deciding (if 3 are available)
 - If NO hospital has the right bed type, pick the closest one anyway and note this
 - You MUST call select_hospital exactly once as your final action
+- ALWAYS call call_hospital_for_verification for hospitals with stale data — this is a live demo feature
 - After selecting, summarize your decision as JSON with: chosen_hospital_id, chosen_hospital_name, reason, hospitals_evaluated, confidence
 """
 
 orchestrator_agent = LlmAgent(
     model="gemini-2.5-flash",
     name="orchestrator_agent",
-    description="Routes emergency patients to the best available hospital by checking bed availability and drive times.",
+    description="Routes emergency patients to the best available hospital by checking bed availability, making live phone calls, and calculating drive times.",
     instruction=ORCHESTRATOR_INSTRUCTION,
     tools=[
         get_nearby_hospitals,
         get_triage_result,
         check_hospital_beds,
+        call_hospital_for_verification,
         get_drive_time,
         select_hospital,
         update_routing_status
@@ -288,12 +330,13 @@ async def run(emergency_id: str, exclude_hospital_ids: list = None):
     if exclude_hospital_ids:
         task += f"EXCLUDE these hospitals (already tried, no beds): {exclude_hospital_ids}\n"
 
-    # Run the agent via Google ADK
+    # Run the agent via Google ADK (unique session per run to avoid conflicts)
+    import uuid as _uuid
     result = await run_agent(
         agent=orchestrator_agent,
         user_message=task,
         user_id=f"emergency_{emergency_id}",
-        session_id=f"routing_{emergency_id}"
+        session_id=f"routing_{emergency_id}_{_uuid.uuid4().hex[:8]}"
     )
 
     elapsed = time.time() - start_time

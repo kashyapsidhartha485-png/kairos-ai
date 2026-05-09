@@ -191,7 +191,7 @@ class HospitalCheckStatus(BaseModel):
 
 
 class RoutingStatusResponse(BaseModel):
-    routing_status: str  # checking_hospitals | calling_{hospital} | hospital_confirmed | routing_complete
+    routing_status: str = "pending"  # checking_hospitals | calling_{hospital} | hospital_confirmed | routing_complete
     hospitals_checked: List[HospitalCheckStatus] = []
     chosen_hospital: Optional[dict] = None
 

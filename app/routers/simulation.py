@@ -66,9 +66,9 @@ async def run_simulation(emergency_id: str, ambulance_id: str, speed: float = 1.
             hosp_lng = hosp.get("lng", hosp_lng)
             hospital_name = hosp.get("name", "Hospital")
 
-    delay = 0.8 / speed  # Time between updates (seconds)
+    delay = 0.4 / speed  # Fast updates for demo
 
-    # ─── PHASE 1: Ambulance → Patient ───
+    # ─── PHASE 1: Ambulance → Patient (5 seconds) ───
     print(f"[Simulation] Phase 1: Ambulance → Patient")
     emergencies_ref().document(emergency_id).update({
         "simulation_phase": "en_route_to_patient",
@@ -76,7 +76,7 @@ async def run_simulation(emergency_id: str, ambulance_id: str, speed: float = 1.
     })
     ambulances_ref().document(ambulance_id).update({"status": "en_route"})
 
-    waypoints_to_patient = interpolate_points(amb_lat, amb_lng, patient_lat, patient_lng, steps=15)
+    waypoints_to_patient = interpolate_points(amb_lat, amb_lng, patient_lat, patient_lng, steps=8)
 
     for i, point in enumerate(waypoints_to_patient):
         ambulances_ref().document(ambulance_id).update({
@@ -100,16 +100,16 @@ async def run_simulation(emergency_id: str, ambulance_id: str, speed: float = 1.
         "patient_pickup_time": datetime.now(timezone.utc).isoformat()
     })
     ambulances_ref().document(ambulance_id).update({"status": "transporting"})
-    await asyncio.sleep(2 / speed)
+    await asyncio.sleep(1 / speed)
 
-    # ─── PHASE 2: Patient → Hospital ───
+    # ─── PHASE 2: Patient → Hospital (5 seconds) ───
     print(f"[Simulation] Phase 2: Patient → {hospital_name}")
     emergencies_ref().document(emergency_id).update({
         "simulation_phase": "en_route_to_hospital",
         "simulation_status": f"Transporting patient to {hospital_name}"
     })
 
-    waypoints_to_hospital = interpolate_points(patient_lat, patient_lng, hosp_lat, hosp_lng, steps=20)
+    waypoints_to_hospital = interpolate_points(patient_lat, patient_lng, hosp_lat, hosp_lng, steps=10)
 
     for i, point in enumerate(waypoints_to_hospital):
         ambulances_ref().document(ambulance_id).update({
@@ -130,7 +130,6 @@ async def run_simulation(emergency_id: str, ambulance_id: str, speed: float = 1.
     emergencies_ref().document(emergency_id).update({
         "simulation_phase": "arrived",
         "simulation_status": f"Patient delivered to {hospital_name}",
-        "status": "completed",
         "arrival_time": datetime.now(timezone.utc).isoformat()
     })
     ambulances_ref().document(ambulance_id).update({
@@ -139,6 +138,14 @@ async def run_simulation(emergency_id: str, ambulance_id: str, speed: float = 1.
         "current_lng": hosp_lng,
         "heading": "idle",
         "progress_percent": 100
+    })
+
+    # Brief pause then mark as complete (frontend polls for this phase)
+    await asyncio.sleep(0.5)
+    emergencies_ref().document(emergency_id).update({
+        "simulation_phase": "complete",
+        "simulation_status": f"Patient delivered to {hospital_name} ✅",
+        "status": "completed"
     })
 
     print(f"[Simulation] Complete!")

@@ -102,4 +102,14 @@ async def close(winning_hospital: dict, emergency: dict, emergency_id: str):
         }
     })
 
+    # ⑥ Auto-start ambulance simulation (so driver dashboard shows live movement)
+    if ambulance_id:
+        try:
+            import asyncio
+            from app.routers.simulation import run_simulation
+            asyncio.create_task(run_simulation(emergency_id, ambulance_id, speed=2.0))
+            print(f"[Closer Agent] 🚑 Auto-started simulation for {emergency_id} → {hospital_name}")
+        except Exception as e:
+            print(f"[Closer Agent] Could not auto-start simulation: {e}")
+
     print(f"[Closer Agent] Routing complete → {hospital_name} (reason: {reason})")
